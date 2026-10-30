@@ -1,0 +1,7 @@
+﻿@font-face {
+  font-family: 'Oxanium';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('./oxanium-latin.woff2') format('woff2');
+}

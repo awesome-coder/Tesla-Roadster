@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#05070b" />
+  <meta name="description" content="ROADSTER // ROCKET — 一款以特斯拉火箭推进 Roadster 为灵感的 3D 飞行公路游戏。" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2305080c'/%3E%3Cpath d='M13 20h9l10 14 10-14h9L34 45V53h-4v-8L13 20Z' fill='%2355e6ff'/%3E%3C/svg%3E" />
+  <title>ROADSTER // ROCKET — 飞行公路</title>
+  <link rel="stylesheet" href="./assets/fonts.css" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body data-screen="menu">
+  <div id="app">
+    <canvas id="scene" aria-label="3D 飞行汽车游戏画面"></canvas>
+
+    <div class="atmosphere" aria-hidden="true">
+      <div class="atmosphere__vignette"></div>
+      <div class="atmosphere__grain"></div>
+      <div class="atmosphere__scanlines"></div>
+      <div class="atmosphere__letterbox atmosphere__letterbox--top"></div>
+      <div class="atmosphere__letterbox atmosphere__letterbox--bottom"></div>
+      <div id="speedLines" class="speed-lines"></div>
+    </div>
+
+    <div id="bootError" class="boot-error" hidden>
+      <strong>启动失败</strong>
+      <span id="bootErrorText">浏览器无法初始化 WebGL 场景。</span>
+    </div>
+
+    <!-- Running HUD -->
+    <header class="hud hud--top">
+      <div class="brand-mini">
+        <span class="brand-mini__mark">R<span>//</span>R</span>
+        <span class="brand-mini__copy">ROADSTER<br /><em>ROCKET PROGRAM</em></span>
+      </div>
+
+      <div class="distance-readout">
+        <span class="eyebrow">DISTANCE</span>
+        <div class="distance-readout__value">
+          <strong id="distanceValue">0</strong><span>m</span>
+        </div>
+        <div class="distance-readout__best">BEST <span id="bestInline">0000 m</span></div>
+      </div>
+
+      <div class="hud-right">
+        <div class="velocity-readout">
+          <span class="eyebrow">VELOCITY</span>
+          <div><strong id="speedValue">0</strong><span>km/h</span></div>
+          <small class="velocity-cap">CAP <b id="speedCapValue">140</b> km/h</small>
+        </div>
+        <div class="hud-actions">
+          <button id="soundBtn" class="icon-btn" type="button" aria-label="切换声音" title="声音 (M)">
+            <svg class="icon icon--sound-on" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/>
+            </svg>
+            <svg class="icon icon--sound-off" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="m16 9 5 6"/><path d="m21 9-5 6"/>
+            </svg>
+          </button>
+          <button id="pauseBtn" class="icon-btn" type="button" aria-label="暂停游戏" title="暂停 (P)">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7z"/><path d="M14 5h4v14h-4z"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="mode-chip" id="modeChip">
+      <span class="mode-chip__dot"></span>
+      <span id="modeChipText">GROUND MODE</span>
+      <span class="mode-chip__level">LV.<b id="difficultyValue">01</b></span>
+    </div>
+
+    <div id="hudAlert" class="hud-alert" role="status" aria-live="assertive">
+      <span class="hud-alert__icon">!</span>
+      <span class="hud-alert__copy">
+        <strong id="hudAlertTitle">FULL ROAD BLOCK</strong>
+        <span id="hudAlertSub">全路障 · 按 SPACE 起飞</span>
+      </span>
+      <span id="hudAlertDistance" class="hud-alert__distance">150m</span>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
+
+    <section class="flight-console" aria-label="冷气推进器状态">
+      <div class="flight-console__top">
+        <div class="flight-console__label">
+          <span class="pressure-dot"></span>
+          <span>COLD-GAS PRESSURE</span>
+          <em>冷气推进</em>
+        </div>
+        <span class="flight-console__state" id="chargeState">CHARGING</span>
+        <span class="flight-console__value"><strong id="chargeValue">0</strong><small>%</small></span>
+      </div>
+      <div class="pressure-track" id="pressureTrack">
+        <div class="pressure-track__fill" id="pressureFill"></div>
+        <div class="pressure-track__ticks" aria-hidden="true"></div>
+        <div class="pressure-track__shine" aria-hidden="true"></div>
+      </div>
+      <div class="flight-console__bottom">
+        <span id="flightHint">地面行驶自动充能</span>
+        <span class="key-hint" id="takeoffHint"><kbd>SPACE</kbd> 起飞</span>
+      </div>
+    </section>
+
+    <div class="control-legend" aria-hidden="true">
+      <span><kbd>A</kbd><kbd>D</kbd> 变道</span>
+      <span><kbd>SPACE</kbd> 起飞</span>
+      <span><kbd>P</kbd> 暂停</span>
+    </div>
+
+    <div class="touch-controls" aria-label="触屏控制">
+      <div class="touch-controls__steer">
+        <button id="touchLeft" class="touch-btn touch-btn--steer" type="button" aria-label="向左变道">←</button>
+        <button id="touchRight" class="touch-btn touch-btn--steer" type="button" aria-label="向右变道">→</button>
+      </div>
+      <button id="touchFly" class="touch-btn touch-btn--fly" type="button" aria-label="起飞">
+        <span>FLY</span><small>冷气推进</small>
+      </button>
+    </div>
+
+    <!-- Menu -->
+    <section id="menuScreen" class="screen screen--menu is-active" aria-labelledby="gameTitle">
+      <div class="menu-shade" aria-hidden="true"></div>
+      <div class="menu-shell">
+        <div class="menu-copy">
+          <div class="kicker">
+            <span class="kicker__line"></span>
+            <span>TESLA × SPACEX · CONCEPT 01</span>
+          </div>
+
+          <h1 id="gameTitle" class="hero-title" aria-label="Roadster Rocket">
+            <span class="hero-title__top" data-text="ROADSTER">ROADSTER</span>
+            <span class="hero-title__bottom" data-text="ROCKET">ROCKET<sup>®</sup></span>
+          </h1>
+
+          <p class="hero-tagline">不止贴地飞行<span class="accent-dot">.</span></p>
+          <p class="hero-desc">
+            十个冷气推进器，一套火箭飞行控制系统。地面蓄能，底盘与尾部同步点火，
+            空中侧滚，蓝条耗尽后自动回正并平稳着陆。
+          </p>
+          <p class="mobile-hint">左右滑动变道 · 蓝条满格后点击 FLY 起飞</p>
+
+          <div class="menu-actions">
+            <button id="startBtn" class="ignite-btn" type="button">
+              <span class="ignite-btn__glow" aria-hidden="true"></span>
+              <span class="ignite-btn__copy">
+                <strong>启动引擎</strong>
+                <small>START ENGINE</small>
+              </span>
+              <span class="ignite-btn__arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="menu-best">
+              <span class="eyebrow">PERSONAL BEST</span>
+              <strong id="menuBest">—</strong>
+            </div>
+          </div>
+
+          <div class="menu-controls">
+            <div class="menu-control">
+              <span class="key-cluster"><kbd>A</kbd><kbd>D</kbd></span>
+              <span>左右变道<small>STEER</small></span>
+            </div>
+            <div class="menu-control">
+              <span class="key-cluster"><kbd>SPACE</kbd></span>
+              <span>满格起飞<small>TAKE OFF</small></span>
+            </div>
+            <div class="menu-control">
+              <span class="key-cluster"><kbd>P</kbd></span>
+              <span>暂停任务<small>PAUSE</small></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-side" aria-hidden="true">
+          <div class="menu-side__index">01</div>
+          <div class="menu-side__rail">
+            <span>COLD GAS</span><span>10 × THRUSTERS</span><span>ROAD LEGAL: NO</span>
+          </div>
+        </div>
+
+        <div class="menu-meta">
+          <span>CAPE CANAVERAL · NIGHT TEST LOOP</span>
+          <span class="menu-meta__center">THRUST VECTORING <i></i> ONLINE</span>
+          <span>UNOFFICIAL FAN CONCEPT</span>
+        </div>
+      </div>
+      <div class="menu-start-tip">按 <kbd>SPACE</kbd> 或点击按钮点火</div>
+    </section>
+
+    <!-- Pause -->
+    <section id="pauseScreen" class="screen screen--modal" aria-labelledby="pauseTitle">
+      <div class="modal-card modal-card--pause">
+        <div class="kicker"><span class="kicker__line"></span><span>MISSION PAUSED</span></div>
+        <h2 id="pauseTitle">推进系统待命</h2>
+        <p>任务已暂停。返回赛道时，气压会从当前状态继续。</p>
+        <div class="modal-actions">
+          <button id="resumeBtn" class="solid-btn" type="button"><span>继续任务</span><kbd>P</kbd></button>
+          <button id="restartFromPauseBtn" class="ghost-btn" type="button">重新开始</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Game over -->
+    <section id="gameOverScreen" class="screen screen--modal" aria-labelledby="gameOverTitle">
+      <div class="modal-card modal-card--result">
+        <div class="result-header">
+          <div class="kicker"><span class="kicker__line kicker__line--red"></span><span>RUN TERMINATED</span></div>
+          <span id="newBestBadge" class="new-best" hidden>NEW RECORD</span>
+        </div>
+        <h2 id="gameOverTitle">碰撞。任务终止。</h2>
+        <div class="final-distance">
+          <span class="final-distance__label">FINAL DISTANCE / 最终距离</span>
+          <div><strong id="finalDistance">0</strong><small>m</small></div>
+        </div>
+        <div class="result-stats">
+          <div><span>飞行时长</span><strong id="finalFlightTime">0.0s</strong></div>
+          <div><span>最高时速</span><strong id="finalTopSpeed">0</strong><small>km/h</small></div>
+          <div><span>个人最佳</span><strong id="finalBest">0</strong><small>m</small></div>
+        </div>
+        <div class="modal-actions">
+          <button id="restartBtn" class="solid-btn solid-btn--red" type="button"><span>再次点火</span><kbd>R</kbd></button>
+          <button id="menuBtn" class="ghost-btn" type="button">返回机库</button>
+        </div>
+        <p class="result-footnote">保持变道，蓄满气压，在封锁前起飞。</p>
+      </div>
+    </section>
+
+    <div id="screenFlash" class="screen-flash" aria-hidden="true"></div>
+    <div id="damageFlash" class="damage-flash" aria-hidden="true"></div>
+
+    <div class="boot-loader" id="bootLoader" aria-hidden="true">
+      <span class="boot-loader__mark">R//R</span>
+      <span class="boot-loader__bar"><i></i></span>
+      <span class="boot-loader__text">INITIALIZING FLIGHT SYSTEMS</span>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
